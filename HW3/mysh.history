@@ -1,4 +1,6 @@
 history -c
 history
-history story
+replay 0
+repeat 5 /bin/ls
+terminateall
 byebye

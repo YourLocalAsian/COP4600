@@ -2,34 +2,38 @@
 // Course: COP 4600
 // Semester: Spring 2022
 // NID: 4562758
-// Homework 3: mysh
-
+// Homework 5: mysh
 
 #include <iostream>
 #include <fstream>
 #include <cstring>
+#include <cstdlib>
 #include <string>
 #include <vector>
 #include <sstream>
 #include <algorithm>
 
-
 #include <stdio.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
+#include <dirent.h>
+#include <libgen.h>
 
 using namespace std;
 
 // definitions
 const char * MYSH = "mysh.history";
+const int SUCCESS = 0;
+const int FAIL = -1;
 
 // convenient functions
 void loadHistory(void);
 void tokenInput(string const &userInput, vector<string> &out);
 void runCommand(vector<string> line);
 
-// required commands
+// HW3 required commands
 int displayHistory(string argument);
 void byebye(void);
 int replay(vector<string> arguments);
@@ -37,10 +41,19 @@ int startProcess(vector<string> arguments);
 int backgroundProcess(vector<string> arguments);
 int terminateProcess(vector<string> arguments);
 
-// extra credit
+// HW5 required commands
+int checkExist(vector<string> arguments);
+int createFile(vector<string> arguments);
+int copyFileToAndFrom(vector<string> arguments);
+
+// HW3 extra credit
 int repeatProcess(vector<string> arguments);
 void printChildren();
 int terminateAllProcesses();
+
+// HW5 extra credit
+int copyDirToAndFrom(vector<string> arguments);
+int copyDirectory(char * source, char * destination);
 
 // global variables
 fstream histFile;
@@ -92,7 +105,7 @@ void runCommand(vector<string> out)
 		byebye();
 	else if (out[0].compare("replay") == 0)
 	{
-		if (replay(out) != 0)
+		if (replay(out) != SUCCESS)
 			cout << "Failed to replay command\n";
 	}
 	else if (out[0].compare("background") == 0)
@@ -113,7 +126,7 @@ void runCommand(vector<string> out)
 	}
 	else if (out[0].compare("repeat") == 0)
 	{
-		if (repeatProcess(out) != 0)
+		if (repeatProcess(out) != SUCCESS)
 			cout << "Unable to repeat command\n";
 	}
 	else if (out[0].compare("terminateall") == 0)
@@ -123,8 +136,28 @@ void runCommand(vector<string> out)
 	}
 	else if (out[0].compare("start") == 0)
 	{
-		if (startProcess(out) != 0)
+		if (startProcess(out) != SUCCESS)
 			cout << "Failed to start process\n";
+	}
+	else if (out[0].compare("dwelt") == 0)
+	{
+		if (checkExist(out) != SUCCESS)
+			cout << "Dwelt not\n";
+	}
+	else if (out[0].compare("maik") == 0)
+	{
+		if (createFile(out) != SUCCESS)
+			cout << "Failed to create file (already exists)\n";
+	}
+	else if (out[0].compare("coppy") == 0)
+	{
+		if (copyFileToAndFrom(out) != SUCCESS)
+			cout << "Failed to copy file\n";
+	}
+	else if (out[0].compare("coppyabode") == 0)
+	{
+		if (copyDirToAndFrom(out) != SUCCESS)
+			cout << "Failed to copy directory\n";
 	}
 	/*
 	else if (out[0].compare("children") == 0) // for debug use only
@@ -182,11 +215,11 @@ int displayHistory(string argument)
 	else
 	{
 		cout << "Syntax error: Invalid parameter ''" << argument << "'" << endl;
-		return -1;
+		return FAIL;
 	}
 
 	// function finished = success
-	return 0;
+	return SUCCESS;
 }
 
 void byebye()
@@ -223,7 +256,7 @@ int replay(vector<string> arguments)
 	if (arguments.size() < 2)
 	{
 		cout << "Command 'replay' requires an integer argument" << endl;
-		return -1;
+		return FAIL;
 	}
 
 	// check valid argument is provided
@@ -231,7 +264,7 @@ int replay(vector<string> arguments)
 	if (!isdigit(temp[0])) // argument isn't an integer
 	{
 		cout << "Command 'replay' requires an integer argument" << endl;
-		return -1;
+		return FAIL;
 	}
 	else // argument is a valid integer
 	{
@@ -239,13 +272,13 @@ int replay(vector<string> arguments)
 		if (i > (prevCommands.size() - 1)) // check if number is in bounds
 		{
 			cout << "Command number is invalid" << endl;
-			return -1;
+			return FAIL;
 		}
 		else
 		{
 			vector<string> command = prevCommands.at(prevCommands.size() - i - 2); // get command
 			runCommand(command); // call start to execute command
-			return 0;
+			return SUCCESS;
 		}
 	}
 
@@ -257,7 +290,7 @@ int startProcess(vector<string> arguments)
 	if (arguments.size() <= 1)
 	{
 		cout << "Command 'start' requires a valid process to run" << endl;
-		return -1;
+		return FAIL;
 	}
 
 	// convert vector<string> to char * []
@@ -275,7 +308,7 @@ int startProcess(vector<string> arguments)
 	if (pid < 0) // error occurred
 	{
 			cout << "Failed forking child..";
-			return -1;
+			return FAIL;
 	}
 	else if (pid == 0) //	Display an error message if the specified program cannot be found or cannot be executed.
 	{
@@ -286,7 +319,7 @@ int startProcess(vector<string> arguments)
 	else
 		waitpid(pid, NULL, 0); // waiting for child to terminate
 
-	return 0;
+	return SUCCESS;
 }
 
 int backgroundProcess(vector<string> arguments)
@@ -295,7 +328,7 @@ int backgroundProcess(vector<string> arguments)
 	if (arguments.size() <= 1)
 	{
 		cout << "Command 'background' requires a valid process to run" << endl;
-		return -1;
+		return FAIL;
 	}
 
 	char * paraList[arguments.size()];
@@ -312,13 +345,13 @@ int backgroundProcess(vector<string> arguments)
 	if (pid < 0) { // error occurred
 			cout << "Failed forking child..";
 			kill(pid, SIGKILL);
-			return -1;
+			return FAIL;
 	}
 	else if (pid == 0) // child process
 		if (execv(paraList[0], paraList) < 0) // check if command wasn't successful
 		{
 			cout << "Failed to start background process\n";
-			return -1;
+			return FAIL;
 		}
 
 	return pid;
@@ -330,7 +363,7 @@ int terminateProcess(vector<string> arguments)
 	if (arguments.size() < 2)
 	{
 		cout << "Command 'terminate' requires a valid PID" << endl;
-		return -1;
+		return FAIL;
 	}
 
 	// check valid argument is provided
@@ -338,7 +371,7 @@ int terminateProcess(vector<string> arguments)
 	if (!isdigit(temp[0])) // argument isn't an integer
 	{
 		cout << "Command 'terminate' requires a valid PID" << endl;
-		return -1;
+		return FAIL;
 	}
 	else // argument is a valid integer
 	{
@@ -349,12 +382,12 @@ int terminateProcess(vector<string> arguments)
 			pidList.erase(remove(pidList.begin(), pidList.end(), pid), pidList.end()); // remove pid from list
 			cout << pid << " successfully terminated\n";;
 			waitpid(pid, NULL, 0); // kill process
-			return 0;
+			return SUCCESS;
 		}
 		else // failed to kill process
 		{
 			cout << pid << " could not be terminated\n";;
-			return 0;
+			return SUCCESS;
 		}
 	}
 }
@@ -367,7 +400,7 @@ int repeatProcess(vector<string> arguments)
 	if (!isdigit(temp[0])) // argument isn't an integer
 	{
 		cout << "Command 'repeat' requires an integer argument" << endl;
-		return -1;
+		return FAIL;
 	}
 	else // argument is a valid integer
 	{
@@ -389,20 +422,20 @@ int repeatProcess(vector<string> arguments)
 
 			if (pid == -1) {
 					printf("\nFailed forking child..");
-					return -1;
+					return FAIL;
 			}
 			else if (pid == 0) //	Display an error message if the specified program cannot be found or cannot be executed.
 			{
 				if (execv(paraList[0], paraList) < 0) // check if command wasn't successful
 				{
 					cout << "Could not execute command." << endl; // print error
-					success = -1;
+					success = FAIL;
 				}
 			}
 			else // Child was started successfully
 			{
 				// print PIDs
-				if (success != -1)
+				if (success != FAIL)
 				{
 					if (i == 0)
 						cout << "Child PID: " << pid << ", ";
@@ -442,13 +475,13 @@ int terminateAllProcesses()
 			else
 			{
 				cout << endl << pid << " could not be terminated, stopping terminations" << endl;
-				return -1;
+				return FAIL;
 			}
 		}
 	}
 
 	// function finished = success
-	return 0;
+	return SUCCESS;
 }
 
 void printChildren()
@@ -458,4 +491,271 @@ void printChildren()
 	else
 		for (int pid : pidList)
 			cout << pid << endl;
+}
+
+int checkExist(vector<string> arguments)
+{
+	//check if proper arguments are supplied
+	if (arguments.size() != 2)
+	{
+		cout << "Command 'dwelt' requires a valid file/directory to run" << endl;
+		return FAIL;
+	}
+
+	struct stat info;
+	char * input = (char *) arguments[1].c_str(); // convert input to char *
+
+	if (stat(input, &info) != 0) // input doesn't exist
+		return FAIL;
+	else if (info.st_mode & S_IFDIR) // check if input is a directory
+		cout << "Abode is" << endl;
+	else if (S_ISREG(info.st_mode)) // check if input is a regular file
+		cout << "Dwelt indeed" << endl;
+	else return FAIL; // default statement
+
+	return SUCCESS; // input was a file/directory
+}
+
+int createFile(vector<string> arguments)
+{
+	//check if proper arguments are supplied
+	if (arguments.size() != 2)
+	{
+		cout << "Command 'maik' requires a valid file to run" << endl;
+		return FAIL;
+	}
+
+	struct stat info;
+	char * input = (char *) arguments[1].c_str(); // convert input to char *
+
+	if (stat(input, &info) != 0) // input file doesn't exist -> continue
+	{
+		fstream newFile;
+
+		// create new file
+		newFile.open(input, ios::in); // open and close file to ensure it exists
+		newFile.close();
+		newFile.open(input, ios::out);
+
+		string newLine = "Draft";
+		newFile << newLine << endl; // write "Draft" to new file
+		newFile.close(); // close the new file
+		return SUCCESS; // successfully created file
+	}
+	else return FAIL; // input file exists -> abort
+}
+
+int copyFileToAndFrom(vector<string> arguments)
+{
+	//check if proper arguments are supplied
+	if (arguments.size() != 3)
+	{
+		cout << "Command 'coppy' requires 2 valid files to run" << endl;
+		return FAIL;
+	}
+
+	// convert inputs to char *
+	char * source = (char *) arguments[1].c_str();
+	char * destination = (char *) arguments[2].c_str();
+	int exists = 0;
+
+	struct stat info;
+
+	// check if source file exists
+	if (stat(source, &info) != 0) // input doesn't exist
+	{
+		cout << "Source file doesn't exist" << endl;
+		return FAIL;
+	}
+	else if (S_ISREG(info.st_mode)) // check if input is a regular file
+		exists++;
+
+	// check if destination directory exists
+	size_t found = arguments[2].find_last_of("/");
+	if (found == string::npos) // directories are the same
+		exists++;
+	else // directories are different
+	{
+		char * path = (char *) arguments[2].substr(0, found).c_str();
+		if (stat(path, &info) != 0) // destination directory doesn't exist
+		{
+			cout << "Destination path (" << path << ") doesn't exist" << endl;
+			return FAIL;
+		}
+		else if (info.st_mode & S_IFDIR) // check if input is a directory
+			exists++;
+	}
+
+	// check if destination file exists
+	if (stat(destination, &info) != 0) // destination file doesn't exist
+		exists++;
+	else
+	{
+		cout << "Destination file exists" << endl;
+		return FAIL; // destination file exists -> abort
+	}
+
+	// make sure all tests passed
+	if (exists != 3)
+	{
+		cout << "Didn't pass all tests" << endl;
+		return FAIL;
+	}
+
+	// copy file over
+	//ifstream sourceFile(source, std::ios::binary);
+	//ofstream destinationFile(destination, std::ios::binary);
+	//destinationFile << sourceFile.rdbuf();
+
+	// copy file over
+	ifstream sourceFile(source);
+	ofstream destinationFile(destination);
+	string line;
+
+	if (sourceFile && destinationFile)
+	{
+		while (getline(sourceFile, line))
+			destinationFile << line << "\n";
+	}
+	else return FAIL; // file copy failed
+
+	// Close files
+	sourceFile.close();
+	destinationFile.close();
+
+	return SUCCESS; // file copy finished
+}
+
+int copyDirToAndFrom(vector<string> arguments)
+{
+	//check if proper arguments are supplied
+	if (arguments.size() != 3)
+	{
+		cout << "Command 'coppyabode' requires 2 valid paths to run" << endl;
+		return FAIL;
+	}
+
+	// convert inputs to char *
+	char * source = (char *) arguments[1].c_str();
+	char * destination = (char *) arguments[2].c_str();
+	int exists = 0;
+	struct stat info;
+
+	// Check if source directory exists
+	if (stat(source, &info) != 0) // input doesn't exist
+	{
+		cout << "Source not found" << endl;
+		return FAIL;
+	}
+	else if (info.st_mode & S_IFDIR) // check if input is a directory
+		exists++;
+	else return FAIL; // default statement
+
+	// Check if destination directory exists
+	if (stat(destination, &info) != 0) // input doesn't exist
+	{
+		cout << "Destination not found" << endl;
+		return FAIL;
+	}
+	else if (info.st_mode & S_IFDIR) // check if input is a directory
+		exists++;
+	else return FAIL; // default statement
+
+	/* Create new subdirectory */
+	// Get the name of source directory
+	size_t found = arguments[1].find_last_of("/");
+	string newDirectoryName;
+	if (found == string::npos)  // source directory is current directory
+	{
+		newDirectoryName = arguments[1];
+	}
+	else // source directory is not current directory
+	{
+		newDirectoryName = arguments[1].substr(found, arguments[1].length());
+	}
+
+	// Concatenate new subdirectory to destination directory path
+	string newFullPath = arguments[2] + "/" + newDirectoryName;
+	char * charNewPath = (char *) newFullPath.c_str();
+
+	mkdir(charNewPath, 0777); // create directory
+
+	return copyDirectory(source, charNewPath); // call helper function
+}
+
+// helper function to recursively open directories
+int copyDirectory(char * source, char * destination)
+{
+	DIR * dir;
+	struct dirent * en;
+
+	dir = opendir(source); //open directory
+	if (dir) {
+		while ((en = readdir(dir)) != NULL)
+		{
+			char * fileDirName = en->d_name;
+			if (fileDirName[0] != '.' && fileDirName[0] != '.' ) // make sure file/directory is valid
+			{
+				/* check if file or subdirectory */
+				struct stat info;
+
+				// reconstruct item source filepath
+				string item(source);
+				item.append("/");
+				item.append(en->d_name);
+				fileDirName = (char *) item.c_str(); // convert item to char *
+
+				if (stat(fileDirName, &info) != 0) // input doesn't exist
+				{
+					return FAIL; // shouldn't be possible
+				}
+				else if (S_ISREG(info.st_mode)) // check if item is a regular file
+				{
+					// construct destination filesp
+					string dst(destination);
+					dst.append("/");
+					dst.append(en->d_name);
+
+					// copy file over
+					// can reuse function from coppy
+					// but don't need to validate paths because we forsure created them
+					ifstream sourceFile(item);
+					ofstream destinationFile(dst);
+					string line;
+
+					if (sourceFile && destinationFile)
+					{
+						while (getline(sourceFile, line))
+							destinationFile << line << "\n";
+					}
+					else
+					{
+						cout << "File copy failed" << endl;
+						return FAIL; // file copy failed
+					}
+					// Close files
+					sourceFile.close();
+					destinationFile.close();
+				}
+				else if (info.st_mode & S_IFDIR) // check if item is a directory
+				{
+					// make new new directory
+					string dst(destination);
+					dst.append("/");
+					dst.append(en->d_name);
+					char * charDest = (char *) dst.c_str();
+					mkdir(charDest, 0777); // create directory
+
+					string src(source);
+					src.append("/");
+					src.append(en->d_name);
+					char * charSource = (char *) src.c_str();
+
+					copyDirectory(charSource, charDest); // make recursive call
+				}
+			}
+		}
+   }
+		closedir(dir); //close directory
+		return SUCCESS;
 }

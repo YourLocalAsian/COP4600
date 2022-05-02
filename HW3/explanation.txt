@@ -1,0 +1,20 @@
+# repeat n command
+
+Example: repeat 4 /bin/xterm
+
+My function "repeatProcess" receives the command as a vector of strings. It first checks to see if the second string (in this case, '4') is an integer. If it is, it continues; if not, it returns '-1'
+It takes this string and converts it into an integer that will bound the for-loop used later. The function then converts the rest of vector of strings into a char * array so that it can be used with 'execv'
+The last index of the char * [] is set to NULL as execv uses it to find the end of the list of arguments. The function then enters a for-loop of forking. 
+fork() is called. The pid is first compared to -1; if true, the function returns -1. It then compares to 0 and checks if execv() was successful (in this example, execv("/bin/xterm", "/bin/xterm/", NULL) is run). If not, a flag is set to return -1.
+If that instance of the loop made it to the end, the child's PID is printed and then pushed to the back of a vector of ints used to store the PIDs of processes running in the background. ("Child PIDs: 31012, 31013, 31014, 31015" would be printed)
+
+
+# terminateall
+
+Example: Assume processes with PIDs 31012, 31013, 31014, 31015 are running
+
+My function "terminateAllProcesses" first checks if the vector storing the PIDs (pidList) is not empty; if so, "No processes to terminate" is printed.
+If the vector isn't empty, "Terminating (pidList.size()) processes: " is printed. The function then enters a for-loop that starts from the back of the vector towards the front.
+It then temporarily stores the PID in the back, pops it from the vector, and calls kill(pid, SIGKILL) to kill the process. 
+If termination was successful, the PID is printed. ("31015, 31014, 31013, 31012" would be printed in that order)
+If not, an error message is printed and -1 is returned. If the function finishes the loop, 0 is returned.

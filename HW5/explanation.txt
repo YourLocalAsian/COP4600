@@ -1,0 +1,33 @@
+In order to implement "coppyabode", I first checked whether both the source and target directories exist, borrowing directly from the code used to implement "dwelt".
+My function then creates a new subdirectory in the target directory. This is accomplished by first parsing the name of the source directory, then concatenating it with the target directory.
+mkdir() is then used to create the directory. The function then calls my helper function.
+
+This helper function uses opendir() to iterate through all the files and subdirectories in the source directory. The current item is then checked to see if it is a file or directory.
+If it's a file, the file is copied over, reusing the code from "coppy". However, if the current item is a directory, a new subdirectory is created and the helper function is recursively called.
+
+Ex:
+Source directory (empty)
+empty
+- 1st_level
+	- blank2.txt
+	- new.txt
+- blank1.txt
+
+Target directory before:
+new
+
+coppyabode empty new
+1. Create new/empty/
+2. Call helper function
+3. Check 1st_level -> directory -> recursive call helper function
+	3a. blank2.txt -> file -> copy file
+	3b. new.txt -> file -> copy file
+4. blank1.txt -> file -> copy file
+
+Target directory after:
+new
+- empty
+	- 1st_level
+		- blank2.txt
+		- new.txt
+	- blank1.tx
